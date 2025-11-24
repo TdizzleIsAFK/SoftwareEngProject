@@ -1,0 +1,2 @@
+[console_scripts]
+refactor-tool = refactor_tool.cli:main
