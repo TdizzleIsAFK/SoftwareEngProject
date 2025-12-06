@@ -1,0 +1,62 @@
+sequenceDiagram
+    actor User
+    participant CLI as cli.py
+    participant Project as project.py
+    participant Rename as rename.py
+    participant LibCST as libcst
+    participant CS as ChangeSet
+
+    Note over User, CLI: Command: rename --file utils.py --name old --to new
+
+    User->>CLI: rename(...)
+    
+    Note right of CLI: 1. Discovery Phase
+    CLI->>Project: discover_python_files(root)
+    Project-->>CLI: List[Path] (utils.py, main.py, ...)
+
+    CLI->>Rename: rename_entrypoint(root, files, utils.py, old, new)
+
+    Note right of Rename: 2. Update Definition (utils.py)
+    Rename->>Project: read_text(utils.py)
+    Rename->>LibCST: parse_module(text)
+    Rename->>Rename: check definition exists & no collisions
+    Rename->>LibCST: visit(DefRename)
+    Note over LibCST: Transforms "def old():" to "def new():"
+    LibCST-->>Rename: updated_module_tree
+    
+    Rename->>CS: new ChangeSet()
+    Rename->>CS: add(utils.py, original, updated)
+    
+    Note right of Rename: 3. Update References (all files)
+    loop For each file F in files
+        Rename->>Project: read_text(F)
+        Rename->>LibCST: parse_module(text)
+        
+        Rename->>LibCST: visit(ImportRename)
+        Note right of LibCST: Updates "from .utils import old"
+        
+        Rename->>LibCST: visit(AttrRename)
+        Note right of LibCST: Updates "utils.old()"
+        
+        Rename->>LibCST: visit(BareNameRename)
+        Note right of LibCST: Updates direct usages
+        
+        alt if content changed
+            Rename->>CS: add(F, original, updated)
+        end
+    end
+
+    Rename-->>CLI: returns ChangeSet
+
+    Note right of CLI: 4. Output / Action Phase
+    alt if --preview
+        CLI->>CS: preview(console)
+        Note over CS: Prints unified diffs to stdout
+    else if --apply
+        CLI->>CS: apply(console)
+        loop For each change
+            CS->>CS: path.write_text(updated)
+        end
+        Note over CS: Writes changes to File System
+    end
+

@@ -1,0 +1,98 @@
+classDiagram
+    %% Core Data Structures
+    class ChangeSet {
+        -Dict~Path, FileChange~ _changes
+        +add(path, original, updated)
+        +merge(other)
+        +is_empty() bool
+        +preview(console)
+        +apply(console)
+    }
+
+    class FileChange {
+        +Path path
+        +str original
+        +str updated
+        +has_change() bool
+        +unified_diff() str
+    }
+
+    %% Exceptions
+    class ExtractError {
+        <<Exception>>
+        +str message
+    }
+    class RenameError {
+        <<Exception>>
+        +str message
+    }
+
+    %% Main Logic Classes / Modules
+    class CLI {
+        <<Module>>
+        +analyze()
+        +rename()
+        +extract()
+        +tidy()
+        +spec()
+        +main()
+    }
+
+    class Project {
+        <<Module>>
+        +discover_python_files()
+        +read_text()
+        +module_path_from_file()
+    }
+
+    class Extract {
+        <<Module>>
+        +extract_function() ChangeSet
+    }
+
+    class Rename {
+        <<Module>>
+        +rename_entrypoint() ChangeSet
+    }
+
+    class Readability {
+        <<Module>>
+        +tidy_files() ChangeSet
+        +find_potential_dead_imports()
+    }
+
+    class Analyze {
+        <<Module>>
+        +analyze_project()
+        +run_spec_and_tests()
+    }
+
+    %% AST Transformers (LibCST Subclasses)
+    class LocalVarRenamer {
+        +visit_FunctionDef()
+        +leave_Name()
+    }
+    
+    class CSTTransformer {
+        <<External LibCST>>
+    }
+
+    %% Relationships
+    ChangeSet *-- "0..*" FileChange : contains
+    
+    CLI ..> Project : uses
+    CLI ..> Rename : calls
+    CLI ..> Extract : calls
+    CLI ..> Readability : calls
+    CLI ..> Analyze : calls
+    
+    Rename ..> ChangeSet : returns
+    Extract ..> ChangeSet : returns
+    Readability ..> ChangeSet : returns
+    
+    Rename ..> RenameError : raises
+    Extract ..> ExtractError : raises
+
+    LocalVarRenamer --|> CSTTransformer
+    Rename ..> LocalVarRenamer : uses (local rename)
+
